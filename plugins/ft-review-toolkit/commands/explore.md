@@ -23,6 +23,7 @@ Run all agents in phased groups to produce a comprehensive thread-safety report.
 | `atomics` | atomic-candidate-finder only |
 | `unsafe-apis` | unsafe-api-detector only |
 | `history` | ft-history-analyzer only |
+| `stress-test` | tsan-stress-generator only |
 
 ## Full Workflow (aspect = all)
 
@@ -45,6 +46,7 @@ These analyze specific aspects using Group A's findings for context.
 
 6. **tsan-report-analyzer**: If TSan report provided, triage it
 7. **stop-the-world-advisor**: Identify operations needing StopTheWorld
+8. **tsan-stress-generator**: Generate concurrent stress test script for TSan
 
 ### Group D: Synthesis
 
@@ -122,4 +124,5 @@ When the same issue is flagged by multiple agents, count it once:
 /ft-review-toolkit:explore . atomics        # Just atomic candidates
 /ft-review-toolkit:explore . unsafe-apis    # Just unsafe APIs
 /ft-review-toolkit:explore . history        # Just git history
+/ft-review-toolkit:explore . stress-test    # Generate TSan stress test script
 ```

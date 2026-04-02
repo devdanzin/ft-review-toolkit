@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `parse_tsan_report.py` — ThreadSanitizer report parsing, deduplication, and triage
 - `tsan-report-analyzer` agent
 - `stop-the-world-advisor` agent — synchronization mechanism recommendations
+- `tsan-stress-generator` agent — generate concurrent stress test scripts for TSan race detection
 - `migration-planner` agent — phased free-threading migration plans
 - `plan` command — produce a tailored migration plan
 - Data files: `thread_safe_apis.json`, `lock_macros.json`, `atomic_patterns.json`, `critical_section_apis.json`, `ft_migration_checklist.json`

@@ -21,5 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `lock-discipline-checker` agent
 - `atomic-candidate-finder` agent
 - `explore` command — full thread-safety analysis with phased agent groups
-- Data files: `thread_safe_apis.json`, `lock_macros.json`, `atomic_patterns.json`, `critical_section_apis.json`
+- `parse_tsan_report.py` — ThreadSanitizer report parsing, deduplication, and triage
+- `tsan-report-analyzer` agent
+- `stop-the-world-advisor` agent — synchronization mechanism recommendations
+- `migration-planner` agent — phased free-threading migration plans
+- `plan` command — produce a tailored migration plan
+- Data files: `thread_safe_apis.json`, `lock_macros.json`, `atomic_patterns.json`, `critical_section_apis.json`, `ft_migration_checklist.json`
 - `task-workflow` skill for standard issue → branch → code → test → commit → PR → merge cycle

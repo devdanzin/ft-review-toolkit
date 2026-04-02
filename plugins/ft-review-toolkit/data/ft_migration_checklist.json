@@ -1,0 +1,187 @@
+{
+  "phases": [
+    {
+      "id": "prerequisites",
+      "name": "Prerequisites",
+      "order": 0,
+      "items": [
+        {
+          "id": "correctness_bugs",
+          "title": "Fix correctness bugs first",
+          "detail": "Run cext-review-toolkit to find and fix correctness bugs (refcount errors, NULL safety, error handling) before adding thread safety.",
+          "required": true
+        },
+        {
+          "id": "tests_passing",
+          "title": "All tests pass on standard Python",
+          "detail": "Ensure the full test suite passes on regular (GIL-enabled) Python before attempting free-threading.",
+          "required": true
+        },
+        {
+          "id": "tsan_setup",
+          "title": "Set up TSan testing infrastructure",
+          "detail": "Build or obtain a TSan-enabled free-threaded Python. Run: /path/to/tsan-python -m pytest tests/ 2> tsan_report.txt",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "declare_intent",
+      "name": "Declare Intent",
+      "order": 1,
+      "items": [
+        {
+          "id": "py_mod_gil",
+          "title": "Add Py_MOD_GIL_NOT_USED",
+          "detail": "Add {Py_mod_gil, Py_MOD_GIL_NOT_USED} to the module's PyModuleDef_Slot array. Requires multi-phase init.",
+          "required": true,
+          "min_version": "3.13"
+        },
+        {
+          "id": "compile_check",
+          "title": "Verify compilation with Py_GIL_DISABLED",
+          "detail": "Build the extension against free-threaded Python headers to catch compile-time issues.",
+          "required": true
+        },
+        {
+          "id": "tsan_baseline",
+          "title": "Run TSan baseline",
+          "detail": "PYTHON_GIL=0 /path/to/tsan-python -m pytest tests/ 2> tsan_baseline.txt",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "protect_shared_state",
+      "name": "Protect Shared State",
+      "order": 2,
+      "items": [
+        {
+          "id": "module_state",
+          "title": "Migrate globals to module state",
+          "detail": "Define module state struct, convert to multi-phase init, move global PyObject* to module state, update all accessor functions.",
+          "required": true,
+          "difficulty": "hard",
+          "prerequisite": "multi_phase_init"
+        },
+        {
+          "id": "heap_types",
+          "title": "Convert static types to heap types",
+          "detail": "Convert static PyTypeObject to PyType_FromSpec/PyType_FromModuleAndSpec. Store type refs in module state.",
+          "required": true,
+          "difficulty": "hard"
+        },
+        {
+          "id": "atomics",
+          "title": "Add atomics for shared primitives",
+          "detail": "Replace static bool/int/pointer with _Py_atomic_* or std::atomic. Use appropriate memory ordering.",
+          "required": true,
+          "difficulty": "easy"
+        },
+        {
+          "id": "critical_sections",
+          "title": "Add per-object critical sections",
+          "detail": "Add Py_BEGIN_CRITICAL_SECTION(self)/Py_END_CRITICAL_SECTION(self) to type methods that access self->member.",
+          "required": true,
+          "difficulty": "medium",
+          "min_version": "3.13"
+        },
+        {
+          "id": "global_locks",
+          "title": "Add PyMutex for global data",
+          "detail": "Protect module-level caches, registries, and shared data structures with PyMutex.",
+          "required": false,
+          "difficulty": "medium"
+        }
+      ]
+    },
+    {
+      "id": "update_apis",
+      "name": "Update API Usage",
+      "order": 3,
+      "items": [
+        {
+          "id": "borrowed_refs",
+          "title": "Replace borrowed ref APIs",
+          "detail": "PyDict_GetItem → PyDict_GetItemRef, PyList_GetItem → PyList_GetItemRef, etc.",
+          "required": true,
+          "min_version": "3.13"
+        },
+        {
+          "id": "deprecated_apis",
+          "title": "Replace deprecated thread-unsafe APIs",
+          "detail": "PyErr_Fetch/Restore → PyErr_GetRaisedException/SetRaisedException",
+          "required": true
+        },
+        {
+          "id": "container_protection",
+          "title": "Protect shared container mutations",
+          "detail": "Add critical sections around PyList_Append, PyDict_SetItem on shared containers.",
+          "required": true
+        },
+        {
+          "id": "gilstate_replacement",
+          "title": "Replace PyGILState with real locks",
+          "detail": "PyGILState_Ensure/Release are no-ops under free-threading. Replace with PyMutex or critical sections.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "verify",
+      "name": "Verify",
+      "order": 4,
+      "items": [
+        {
+          "id": "tsan_full",
+          "title": "Run full TSan test suite",
+          "detail": "PYTHON_GIL=0 /path/to/tsan-python -m pytest tests/ 2> tsan_report.txt",
+          "required": true
+        },
+        {
+          "id": "tsan_triage",
+          "title": "Triage TSan findings",
+          "detail": "Use ft-review-toolkit:explore with tsan aspect to triage findings.",
+          "required": true
+        },
+        {
+          "id": "concurrent_tests",
+          "title": "Write concurrent stress tests",
+          "detail": "Create tests that exercise critical paths from multiple threads simultaneously.",
+          "required": true
+        },
+        {
+          "id": "tsan_clean",
+          "title": "Achieve TSan-clean status",
+          "detail": "Iterate fixing races and re-running TSan until no extension races remain.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "maintain",
+      "name": "Maintain",
+      "order": 5,
+      "items": [
+        {
+          "id": "tsan_ci",
+          "title": "Add TSan CI job",
+          "detail": "Run tests under TSan on every PR to prevent regressions.",
+          "required": true
+        },
+        {
+          "id": "document_invariants",
+          "title": "Document thread-safety invariants",
+          "detail": "Add comments documenting which locks protect which data, threading assumptions.",
+          "required": false
+        },
+        {
+          "id": "review_process",
+          "title": "Review new code for thread safety",
+          "detail": "Include thread-safety review in PR process for C code changes.",
+          "required": false
+        }
+      ]
+    }
+  ]
+}

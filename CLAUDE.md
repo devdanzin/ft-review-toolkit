@@ -93,7 +93,7 @@ Severities: **CRITICAL**, **HIGH**, **MEDIUM**, **LOW**
 
 ### Agents
 
-Markdown files in `plugins/ft-review-toolkit/agents/`. YAML frontmatter with `name`, `description` (with `<example>` tags), `model: opus`, `color`. Body has 3 phases: run scanner, triage findings, pattern review beyond script.
+Markdown files in `plugins/ft-review-toolkit/agents/`. YAML frontmatter with `name`, `description` (with `<example>` tags), `model: opus`, `color`. Script-backed agents have 3 phases: run scanner, triage findings, pattern review beyond script. Qualitative agents (stop-the-world-advisor, migration-planner, tsan-stress-generator) use Grep/Read/Bash directly.
 
 ## Testing notes
 - All tests use `unittest` — never pytest

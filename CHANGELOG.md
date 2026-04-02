@@ -16,4 +16,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `unsafe-api-detector` agent
 - `ft-history-analyzer` agent
 - `assess` command — quick free-threading readiness dashboard
-- Data files: `thread_safe_apis.json`, `lock_macros.json`
+- `scan_lock_discipline.py` — lock acquire/release pairing and error path analysis
+- `scan_atomic_candidates.py` — find variables needing atomic operations
+- `lock-discipline-checker` agent
+- `atomic-candidate-finder` agent
+- `explore` command — full thread-safety analysis with phased agent groups
+- Data files: `thread_safe_apis.json`, `lock_macros.json`, `atomic_patterns.json`, `critical_section_apis.json`

@@ -1,0 +1,103 @@
+{
+  "unsafe_without_gil": [
+    "PyObject_Call", "PyObject_CallObject", "PyObject_CallFunction",
+    "PyObject_CallMethod", "PyObject_CallNoArgs", "PyObject_CallOneArg",
+    "PyObject_GetAttr", "PyObject_GetAttrString",
+    "PyObject_SetAttr", "PyObject_SetAttrString",
+    "PyObject_GetItem", "PyObject_SetItem", "PyObject_DelItem",
+    "PyObject_Str", "PyObject_Repr", "PyObject_ASCII",
+    "PyObject_Bytes", "PyObject_Format",
+    "PyObject_RichCompare", "PyObject_RichCompareBool",
+    "PyObject_Hash", "PyObject_IsTrue",
+    "PyObject_Vectorcall",
+    "PyUnicode_FromString", "PyUnicode_FromFormat",
+    "PyUnicode_Decode", "PyUnicode_Join", "PyUnicode_Substring",
+    "PyBytes_FromString", "PyBytes_FromStringAndSize",
+    "PyLong_FromLong", "PyLong_FromSsize_t", "PyLong_FromDouble",
+    "PyFloat_FromDouble",
+    "PyList_New", "PyList_Append", "PyList_SetItem", "PyList_GetItem",
+    "PyList_SET_ITEM", "PyList_GET_ITEM", "PyList_Size", "PyList_GetSlice",
+    "PyTuple_New", "PyTuple_Pack", "PyTuple_SetItem", "PyTuple_GetItem",
+    "PyTuple_SET_ITEM", "PyTuple_GET_ITEM",
+    "PyDict_New", "PyDict_SetItem", "PyDict_SetItemString",
+    "PyDict_GetItem", "PyDict_GetItemString", "PyDict_GetItemWithError",
+    "PyDict_GetItemRef",
+    "PyDict_DelItem", "PyDict_DelItemString",
+    "PyDict_Contains", "PyDict_Copy", "PyDict_Size",
+    "PyDict_Keys", "PyDict_Values", "PyDict_Items",
+    "PySet_New", "PySet_Add", "PySet_Contains",
+    "PySequence_GetItem", "PySequence_SetItem", "PySequence_Length",
+    "PySequence_List", "PySequence_Tuple", "PySequence_Concat",
+    "PyMapping_Keys", "PyMapping_Values", "PyMapping_Items",
+    "PyNumber_Add", "PyNumber_Subtract", "PyNumber_Multiply",
+    "PyNumber_TrueDivide", "PyNumber_FloorDivide",
+    "PyIter_Next",
+    "PyImport_ImportModule", "PyImport_Import",
+    "PyModule_Create", "PyModule_Create2",
+    "PyModule_AddObject", "PyModule_AddObjectRef",
+    "PyModule_AddIntConstant", "PyModule_AddStringConstant",
+    "PyModuleDef_Init",
+    "PyType_Ready", "PyType_FromSpec", "PyType_FromSpecWithBases",
+    "PyType_FromModuleAndSpec",
+    "PyErr_SetString", "PyErr_SetObject", "PyErr_Format",
+    "PyErr_Occurred", "PyErr_Clear", "PyErr_Fetch", "PyErr_Restore",
+    "PyErr_NewException", "PyErr_CheckSignals",
+    "PyErr_SetFromErrno", "PyErr_SetFromWindowsErr",
+    "PyErr_GetRaisedException", "PyErr_SetRaisedException",
+    "Py_BuildValue",
+    "Py_INCREF", "Py_DECREF", "Py_XINCREF", "Py_XDECREF",
+    "Py_NewRef", "Py_XNewRef",
+    "PyCapsule_New", "PyCapsule_GetPointer",
+    "PyMem_Malloc", "PyMem_Realloc", "PyMem_Free",
+    "PyObject_Malloc", "PyObject_Free",
+    "PySys_GetObject", "PySys_SetObject",
+    "PyArg_ParseTuple", "PyArg_ParseTupleAndKeywords",
+    "PyArg_Parse", "PyArg_UnpackTuple",
+    "PyWeakref_NewRef", "PyWeakref_GetObject", "PyWeakref_GET_OBJECT",
+    "PyGILState_Ensure", "PyGILState_Release",
+    "Py_TYPE",
+    "PyObject_GenericGetAttr", "PyObject_GenericSetAttr"
+  ],
+
+  "safe_without_gil": [
+    "Py_AddPendingCall",
+    "PyGILState_Ensure"
+  ],
+
+  "borrowed_ref_apis": {
+    "PyList_GetItem": {"safe_replacement": "PyList_GetItemRef", "min_version": "3.13"},
+    "PyList_GET_ITEM": {"safe_replacement": "PyList_GetItemRef", "min_version": "3.13"},
+    "PyTuple_GetItem": {"safe_replacement": null, "min_version": null},
+    "PyTuple_GET_ITEM": {"safe_replacement": null, "min_version": null},
+    "PyDict_GetItem": {"safe_replacement": "PyDict_GetItemRef", "min_version": "3.13"},
+    "PyDict_GetItemString": {"safe_replacement": "PyDict_GetItemStringRef", "min_version": "3.13"},
+    "PyDict_GetItemWithError": {"safe_replacement": "PyDict_GetItemRef", "min_version": "3.13"},
+    "PyModule_GetDict": {"safe_replacement": null, "min_version": null},
+    "PyImport_GetModuleDict": {"safe_replacement": null, "min_version": null},
+    "PySys_GetObject": {"safe_replacement": "PySys_GetAttr", "min_version": "3.13"},
+    "PyWeakref_GetObject": {"safe_replacement": "PyWeakref_GetRef", "min_version": "3.13"},
+    "PyWeakref_GET_OBJECT": {"safe_replacement": "PyWeakref_GetRef", "min_version": "3.13"},
+    "PySequence_Fast_GET_ITEM": {"safe_replacement": null, "min_version": null},
+    "PyCell_GET": {"safe_replacement": null, "min_version": null}
+  },
+
+  "deprecated_thread_apis": {
+    "PyErr_Fetch": {"replacement": "PyErr_GetRaisedException", "reason": "Not thread-safe under free-threading"},
+    "PyErr_Restore": {"replacement": "PyErr_SetRaisedException", "reason": "Not thread-safe under free-threading"},
+    "PyErr_NormalizeException": {"replacement": "PyErr_GetRaisedException", "reason": "Not thread-safe under free-threading"}
+  },
+
+  "container_mutation_apis": [
+    "PyList_Append", "PyList_Insert", "PyList_SetSlice",
+    "PyList_Sort", "PyList_Reverse", "PyList_SetItem", "PyList_SET_ITEM",
+    "PyDict_SetItem", "PyDict_SetItemString",
+    "PyDict_DelItem", "PyDict_DelItemString",
+    "PyDict_Clear", "PyDict_Update", "PyDict_Merge",
+    "PySet_Add", "PySet_Discard", "PySet_Pop", "PySet_Clear"
+  ],
+
+  "gilstate_noop_apis": [
+    "PyGILState_Ensure",
+    "PyGILState_Release"
+  ]
+}

@@ -104,5 +104,8 @@ Markdown files in `plugins/ft-review-toolkit/agents/`. YAML frontmatter with `na
 - **C++ parsing is optional:** All scripts must work without tree-sitter-cpp. Use `is_cpp_available()` to gate C++ features.
 - **`analyze_ft_history.py` has a different `analyze()` signature:** Takes `argv` list instead of `(target, max_files)`.
 
+## Workflow
+- Use `/task-workflow <description>` for the full issue → branch → code → test → commit → PR → merge cycle
+
 ## Design document
 `ft-review-toolkit-design.md` at the repo root is the authoritative design reference.

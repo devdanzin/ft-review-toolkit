@@ -22,3 +22,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `atomic-candidate-finder` agent
 - `explore` command — full thread-safety analysis with phased agent groups
 - Data files: `thread_safe_apis.json`, `lock_macros.json`, `atomic_patterns.json`, `critical_section_apis.json`
+- `task-workflow` skill for standard issue → branch → code → test → commit → PR → merge cycle

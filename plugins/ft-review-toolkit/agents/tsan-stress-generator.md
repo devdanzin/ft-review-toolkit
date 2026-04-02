@@ -118,6 +118,9 @@ Produce a **self-contained** Python script with these properties:
 5. **Configurable** — THREADS and ITERATIONS as constants at the top
 6. **Error-tolerant** — catch exceptions in threads (we want races, not crashes from bad args)
 7. **Barrier synchronization** — use `threading.Barrier` to start all threads simultaneously
+8. **TSan auto-detection** — detect TSan builds via sysconfig CFLAGS and reduce threads/iterations (TSan finds races on first occurrence; volume just adds overhead)
+9. **Subprocess isolation** — each scenario runs in a `os.fork()`ed child process so SEGVs don't kill the parent. TSan stderr from children goes to the same fd. Parent uses `os.waitpid` with `WNOHANG` polling loop for timeout.
+10. **Per-scenario timeout** — kill child after SCENARIO_TIMEOUT seconds (TSan overhead on heavily raced code can cause near-infinite runtimes)
 
 ## Output Format
 
@@ -133,11 +136,29 @@ Run with TSan-enabled free-threaded Python:
 Then triage with:
     /ft-review-toolkit:explore . tsan tsan_report.txt
 """
-import threading
+import os
+import signal
 import sys
+import threading
+import time
 
 THREADS = 8
 ITERATIONS = 10_000
+SCENARIO_TIMEOUT = 60  # seconds — kill child if TSan overhead stalls it
+
+
+# TSan adds 5-15x overhead and finds races on first occurrence.
+def _is_tsan_build():
+    try:
+        import sysconfig
+        cflags = (sysconfig.get_config_var("CFLAGS") or "").lower()
+        return "fsanitize=thread" in cflags
+    except Exception:
+        return False
+
+if _is_tsan_build():
+    THREADS = min(THREADS, 4)
+    ITERATIONS = min(ITERATIONS, 200)
 
 # Suppress GIL warning if present
 import warnings
@@ -147,8 +168,49 @@ import <extension>
 
 
 def run_scenario(name, target_fns, thread_counts=None):
-    """Run a stress scenario with multiple thread groups."""
+    """Run a stress scenario, isolated in a forked subprocess.
+
+    Each scenario runs in a child process so SEGVs don't kill the parent.
+    TSan stderr from children goes to the same fd.
+    """
     print(f"  Running: {name}...", end=" ", flush=True)
+
+    pid = os.fork()
+    if pid == 0:
+        try:
+            _run_scenario_threads(target_fns, thread_counts)
+            os._exit(0)
+        except SystemExit as e:
+            os._exit(e.code if isinstance(e.code, int) else 1)
+        except Exception:
+            os._exit(1)
+
+    # Parent waits with timeout.
+    deadline = time.monotonic() + SCENARIO_TIMEOUT
+    wait_status = None
+    while time.monotonic() < deadline:
+        pid_result, status = os.waitpid(pid, os.WNOHANG)
+        if pid_result != 0:
+            wait_status = status
+            break
+        time.sleep(0.1)
+
+    if wait_status is None:
+        os.kill(pid, signal.SIGKILL)
+        os.waitpid(pid, 0)
+        print(f"TIMEOUT ({SCENARIO_TIMEOUT}s)")
+    elif os.WIFSIGNALED(wait_status):
+        sig = os.WTERMSIG(wait_status)
+        signame = signal.Signals(sig).name if sig in signal.Signals._value2member_map_ else str(sig)
+        print(f"CRASH ({signame})")
+    elif os.WIFEXITED(wait_status) and os.WEXITSTATUS(wait_status) != 0:
+        print(f"FAIL (exit {os.WEXITSTATUS(wait_status)})")
+    else:
+        print("OK")
+
+
+def _run_scenario_threads(target_fns, thread_counts=None):
+    """Run target functions in threads with barrier synchronization."""
     if thread_counts is None:
         thread_counts = [THREADS] * len(target_fns)
 
@@ -175,8 +237,8 @@ def run_scenario(name, target_fns, thread_counts=None):
     for t in threads:
         t.join(timeout=30)
 
-    status = "OK" if not errors else f"{len(errors)} errors"
-    print(status)
+    if errors:
+        sys.exit(1)
 
 
 def scenario_1():

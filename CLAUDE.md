@@ -76,9 +76,12 @@ All scripts live in `plugins/ft-review-toolkit/scripts/`. Every analysis script 
 | `scan_common.py` | Vendored shared utilities from cext-review-toolkit |
 | `scan_shared_state.py` | Global/static shared mutable state detection |
 | `scan_unsafe_apis.py` | Thread-unsafe Python/C API usage detection |
+| `scan_lock_discipline.py` | Lock acquire/release pairing and error path analysis |
+| `scan_atomic_candidates.py` | Variables needing atomic operations |
+| `parse_tsan_report.py` | ThreadSanitizer report parsing and triage |
 | `analyze_ft_history.py` | Git history analysis for free-threading commits |
 
-**Script calling convention:** Every analysis script exposes `analyze(target: str, *, max_files: int = 0) -> dict` returning a JSON envelope with `{project_root, scan_root, files_analyzed, functions_analyzed, findings, summary, skipped_files}`. Exception: `analyze_ft_history.py` takes `argv` (matching cext-review-toolkit convention).
+**Script calling convention:** Every analysis script exposes `analyze(target: str, *, max_files: int = 0) -> dict` returning a JSON envelope with `{project_root, scan_root, files_analyzed, functions_analyzed, findings, summary, skipped_files}`. Exception: `analyze_ft_history.py` takes `argv` (matching cext-review-toolkit convention). Exception: `parse_tsan_report.py` takes `target` as a TSan report file path, not a source directory.
 
 ### Classification system
 

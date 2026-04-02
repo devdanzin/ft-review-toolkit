@@ -1,0 +1,14 @@
+{
+  "name": "ft-review-toolkit",
+  "owner": {
+    "name": "Danzin"
+  },
+  "plugins": [
+    {
+      "name": "ft-review-toolkit",
+      "source": "./plugins/ft-review-toolkit",
+      "description": "Free-threading migration toolkit for CPython C extensions. Finds thread-safety bugs (data races, unprotected shared state, unsafe API usage), plans migrations to free-threaded Python (PEP 703), triages ThreadSanitizer reports, and produces readiness assessments. Tree-sitter-powered C/C++ parsing.",
+      "version": "0.1.0"
+    }
+  ]
+}

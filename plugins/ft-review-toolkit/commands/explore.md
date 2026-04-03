@@ -24,6 +24,7 @@ Run all agents in phased groups to produce a comprehensive thread-safety report.
 | `unsafe-apis` | unsafe-api-detector only |
 | `history` | ft-history-analyzer only |
 | `tsan [report.txt]` | tsan-report-analyzer with provided report |
+| `stw-safety` | stw-safety-checker only (for extensions using _PyEval_StopTheWorld) |
 | `stress-test` | tsan-stress-generator only (generates script, does NOT run it) |
 
 ## Full Workflow (aspect = all)
@@ -47,6 +48,7 @@ These analyze specific aspects using Group A's findings for context.
 
 6. **tsan-report-analyzer**: Triage TSan report — **only runs if a TSan report path is provided** as an additional argument (e.g., `explore . all tsan_report.txt`)
 7. **stop-the-world-advisor**: Identify operations needing StopTheWorld
+8. **stw-safety-checker**: Run `scan_stw_safety.py` — **only runs if the extension uses `_PyEval_StopTheWorld`**. Builds call graphs and detects unsafe operations during STW.
 
 Note: **tsan-stress-generator is NOT part of the explore pipeline.** It produces a script that must be executed externally (by the user or labeille) before its output is useful. Use `explore . stress-test` as a standalone step. The intended workflow is:
 1. `explore . stress-test` → generates `tsan_stress_<name>.py`
@@ -131,5 +133,6 @@ When the same issue is flagged by multiple agents, count it once:
 /ft-review-toolkit:explore . history        # Just git history
 /ft-review-toolkit:explore . tsan report.txt  # Triage a TSan report
 /ft-review-toolkit:explore . all report.txt   # Full analysis + TSan triage
+/ft-review-toolkit:explore . stw-safety    # STW call-graph safety analysis
 /ft-review-toolkit:explore . stress-test    # Generate TSan stress test script (standalone)
 ```

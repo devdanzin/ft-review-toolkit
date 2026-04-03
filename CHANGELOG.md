@@ -29,6 +29,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `plan` command — produce a tailored migration plan
 - Data files: `thread_safe_apis.json`, `lock_macros.json`, `atomic_patterns.json`, `critical_section_apis.json`, `ft_migration_checklist.json`
 - `task-workflow` skill for standard issue → branch → code → test → commit → PR → merge cycle
+- `scan_stw_safety.py` — StopTheWorld safety analysis with intra-file call graph, function classification (stw_safe/stw_unsafe/stw_unknown), and STW region violation detection
+- `stw-safety-checker` agent — verifies code during `_PyEval_StopTheWorld` doesn't invoke Python, trigger GC, or set exceptions
+- `data/stw_safe_apis.json` — CPython API classification for StopTheWorld safety (safe/unsafe/contract rules with CPython source evidence)
+- `_PyEval_StopTheWorld`/`_PyEval_StartTheWorld` pairing in lock discipline scanner
+- Enhanced `stop-the-world-advisor` with STW safety contract guidance
 
 ### Fixed
 - Remove `tsan-stress-generator` from `explore` pipeline Group C. It produces a script (not findings) that must be executed externally before its output is useful. Available as standalone aspect (`explore . stress-test`).

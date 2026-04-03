@@ -102,6 +102,23 @@ grep -n "PyMem_SetAllocator\|PyMem_GetAllocator\|tracemalloc\|_PyTraceMalloc\|py
 ```
 ```
 
+## StopTheWorld Safety Contract
+
+When recommending `_PyEval_StopTheWorld`, also advise on what's safe to do during STW. Reference `data/stw_safe_apis.json` for the full classification.
+
+**The key rule**: Read during STW, process after. Collect raw data (pointers, sizes, refcounts) while the world is stopped, then `_PyEval_StartTheWorld` and process the data.
+
+**Safe during STW**: `Py_INCREF`/`Py_DECREF`, `Py_TYPE`, `PyTuple_GET_ITEM`, `PyList_GET_ITEM`, `PyLong_AsLong`, `PyMem_Malloc`/`Free`, `Py_VISIT`, `_Py_atomic_*`, `memcpy`/`memset`.
+
+**Unsafe during STW** (call `_PyEval_StartTheWorld` first):
+- `PyObject_Call*`, `PyObject_GetAttr*`, `PyObject_Str` — invoke Python code
+- `PyErr_SetString`, `PyErr_NoMemory` — exception machinery (CPython's GC calls StartTheWorld before PyErr_NoMemory, see `gc_free_threading.c:2223`)
+- `PyList_New`, `PyDict_New` — allocation may trigger GC
+- `PyDict_GetItem` — may invoke `__hash__`/`__eq__`
+- Nested `_PyEval_StopTheWorld` — deadlocks
+
+**For extensions using STW**, also run the `stw-safety-checker` agent which uses `scan_stw_safety.py` to build call graphs and detect transitive violations (function A calls B which calls `PyObject_Str` → A is unsafe during STW).
+
 ## Important Guidelines
 
 1. **StopTheWorld is the last resort.** It's extremely expensive — all threads must pause. Only recommend it for operations that truly need global quiescence (GC list walking, interpreter state modification).
@@ -109,4 +126,5 @@ grep -n "PyMem_SetAllocator\|PyMem_GetAllocator\|tracemalloc\|_PyTraceMalloc\|py
 3. **PyMutex for global data.** Module-level caches, registries, shared data structures.
 4. **Restructure when possible.** Per-thread state, immutable data after init, or copy-on-write eliminate the need for synchronization entirely.
 5. **Most extensions don't need StopTheWorld.** Only flag it for extensions that deeply integrate with CPython internals (GC, import system, memory allocators).
-6. **Report at most 10 findings.** These are high-impact recommendations, not exhaustive lists.
+6. **When recommending STW, always include the safety contract.** What's safe to call, what isn't, and the correct read-then-process pattern.
+7. **Report at most 10 findings.** These are high-impact recommendations, not exhaustive lists.

@@ -23,7 +23,8 @@ Run all agents in phased groups to produce a comprehensive thread-safety report.
 | `atomics` | atomic-candidate-finder only |
 | `unsafe-apis` | unsafe-api-detector only |
 | `history` | ft-history-analyzer only |
-| `stress-test` | tsan-stress-generator only |
+| `tsan [report.txt]` | tsan-report-analyzer with provided report |
+| `stress-test` | tsan-stress-generator only (generates script, does NOT run it) |
 
 ## Full Workflow (aspect = all)
 
@@ -42,11 +43,15 @@ These analyze specific aspects using Group A's findings for context.
 4. **atomic-candidate-finder**: Run `scan_atomic_candidates.py`, find atomic candidates
 5. **unsafe-api-detector**: Run `scan_unsafe_apis.py`, find unsafe API usage
 
-### Group C: Qualitative (if available — Phase 3 agents)
+### Group C: Qualitative (uses Groups A+B context)
 
-6. **tsan-report-analyzer**: If TSan report provided, triage it
+6. **tsan-report-analyzer**: Triage TSan report — **only runs if a TSan report path is provided** as an additional argument (e.g., `explore . all tsan_report.txt`)
 7. **stop-the-world-advisor**: Identify operations needing StopTheWorld
-8. **tsan-stress-generator**: Generate concurrent stress test script for TSan
+
+Note: **tsan-stress-generator is NOT part of the explore pipeline.** It produces a script that must be executed externally (by the user or labeille) before its output is useful. Use `explore . stress-test` as a standalone step. The intended workflow is:
+1. `explore . stress-test` → generates `tsan_stress_<name>.py`
+2. User/labeille runs script under TSan Python → produces `tsan_report.txt`
+3. `explore . tsan tsan_report.txt` or `explore . all tsan_report.txt` → triages the report
 
 ### Group D: Synthesis
 
@@ -124,5 +129,7 @@ When the same issue is flagged by multiple agents, count it once:
 /ft-review-toolkit:explore . atomics        # Just atomic candidates
 /ft-review-toolkit:explore . unsafe-apis    # Just unsafe APIs
 /ft-review-toolkit:explore . history        # Just git history
-/ft-review-toolkit:explore . stress-test    # Generate TSan stress test script
+/ft-review-toolkit:explore . tsan report.txt  # Triage a TSan report
+/ft-review-toolkit:explore . all report.txt   # Full analysis + TSan triage
+/ft-review-toolkit:explore . stress-test    # Generate TSan stress test script (standalone)
 ```

@@ -66,6 +66,13 @@
       "acquire": ["PyGILState_Ensure"],
       "release": ["PyGILState_Release"],
       "type": "gilstate"
+    },
+    {
+      "name": "StopTheWorld",
+      "acquire": ["_PyEval_StopTheWorld", "_PyEval_StopTheWorldAll"],
+      "release": ["_PyEval_StartTheWorld", "_PyEval_StartTheWorldAll"],
+      "type": "stop_the_world",
+      "note": "Stops all other threads. No Python code, GC, or exceptions allowed until StartTheWorld."
     }
   ],
   "all_acquire_macros": [
@@ -77,7 +84,8 @@
     "Py_BEGIN_CRITICAL_SECTION", "Py_BEGIN_CRITICAL_SECTION2",
     "EnterCriticalSection", "TryEnterCriticalSection",
     "AcquireSRWLockExclusive", "AcquireSRWLockShared",
-    "PyGILState_Ensure"
+    "PyGILState_Ensure",
+    "_PyEval_StopTheWorld", "_PyEval_StopTheWorldAll"
   ],
   "all_release_macros": [
     "PyThread_release_lock",
@@ -88,6 +96,7 @@
     "Py_END_CRITICAL_SECTION", "Py_END_CRITICAL_SECTION2",
     "LeaveCriticalSection",
     "ReleaseSRWLockExclusive", "ReleaseSRWLockShared",
-    "PyGILState_Release"
+    "PyGILState_Release",
+    "_PyEval_StartTheWorld", "_PyEval_StartTheWorldAll"
   ]
 }

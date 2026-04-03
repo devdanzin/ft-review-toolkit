@@ -79,6 +79,7 @@ All scripts live in `plugins/ft-review-toolkit/scripts/`. Every analysis script 
 | `scan_lock_discipline.py` | Lock acquire/release pairing and error path analysis |
 | `scan_atomic_candidates.py` | Variables needing atomic operations |
 | `parse_tsan_report.py` | ThreadSanitizer report parsing and triage |
+| `scan_stw_safety.py` | StopTheWorld safety: call-graph analysis for STW region violations |
 | `analyze_ft_history.py` | Git history analysis for free-threading commits |
 
 **Script calling convention:** Every analysis script exposes `analyze(target: str, *, max_files: int = 0) -> dict` returning a JSON envelope with `{project_root, scan_root, files_analyzed, functions_analyzed, findings, summary, skipped_files}`. Exception: `analyze_ft_history.py` takes `argv` (matching cext-review-toolkit convention). Exception: `parse_tsan_report.py` takes `target` as a TSan report file path, not a source directory.

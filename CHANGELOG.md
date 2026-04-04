@@ -35,5 +35,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `_PyEval_StopTheWorld`/`_PyEval_StartTheWorld` pairing in lock discipline scanner
 - Enhanced `stop-the-world-advisor` with STW safety contract guidance
 
+### Enhanced
+- Revised STW safety contract based on YiFei Zhu's analysis of CPython allocation paths: object allocation is safe during STW on Python 3.14+ (GC runs only on eval breaker), `PyErr_NoMemory`/`PyErr_SetString` conditionally safe, dict ops safe with `CheckExact` types. Updated `stw_safe_apis.json`, `scan_stw_safety.py`, and tests.
+
 ### Fixed
 - Remove `tsan-stress-generator` from `explore` pipeline Group C. It produces a script (not findings) that must be executed externally before its output is useful. Available as standalone aspect (`explore . stress-test`).

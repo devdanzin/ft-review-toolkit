@@ -15,8 +15,8 @@ traverse_heap(PyObject *self, PyObject *args)
     PyInterpreterState *interp = _PyInterpreterState_GET();
     _PyEval_StopTheWorld(interp);
 
-    /* UNSAFE: PyErr_SetString invokes exception machinery */
-    PyErr_SetString(PyExc_RuntimeError, "oops");
+    /* UNSAFE: PyErr_Format with %R invokes PyObject_Repr — always unsafe */
+    PyErr_Format(PyExc_RuntimeError, "bad: %R", args);
 
     _PyEval_StartTheWorld(interp);
     return NULL;
@@ -49,7 +49,8 @@ alloc_during_stw(PyObject *self, PyObject *args)
     PyInterpreterState *interp = _PyInterpreterState_GET();
     _PyEval_StopTheWorld(interp);
 
-    /* UNSAFE: PyList_New allocates, may trigger GC */
+    /* SAFE on 3.14+: PyList_New allocates but does NOT trigger GC
+       (GC runs only on eval breaker, not during allocation) */
     PyObject *result = PyList_New(0);
 
     _PyEval_StartTheWorld(interp);
@@ -148,7 +149,7 @@ class TestScanStwSafety(unittest.TestCase):
     """Test StopTheWorld safety analysis."""
 
     def test_unsafe_exception_detected(self):
-        """PyErr_SetString in STW region is detected."""
+        """PyErr_Format (always unsafe) in STW region is detected."""
         with TempExtension({"stw.c": STW_WITH_UNSAFE_CALL}) as root:
             result = stw.analyze(str(root))
             types = [f["type"] for f in result["findings"]]
@@ -169,12 +170,16 @@ class TestScanStwSafety(unittest.TestCase):
             )
             self.assertEqual(finding["api_call"], "PyObject_Str")
 
-    def test_allocation_in_stw_detected(self):
-        """PyList_New in STW region is detected."""
+    def test_allocation_in_stw_safe_on_314(self):
+        """PyList_New in STW region is safe on 3.14+ (no GC trigger)."""
         with TempExtension({"stw.c": STW_WITH_ALLOCATION}) as root:
             result = stw.analyze(str(root))
-            types = [f["type"] for f in result["findings"]]
-            self.assertIn("stw_allocation_during_stw", types)
+            alloc_findings = [
+                f
+                for f in result["findings"]
+                if f["type"] == "stw_allocation_during_stw"
+            ]
+            self.assertEqual(len(alloc_findings), 0)
 
     def test_safe_stw_no_findings(self):
         """Safe operations in STW region produce no findings."""

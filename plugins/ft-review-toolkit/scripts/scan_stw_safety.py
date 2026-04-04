@@ -41,22 +41,70 @@ def _load_stw_apis() -> dict:
 
 
 def _get_safe_apis() -> set[str]:
-    """Get all APIs classified as safe during STW."""
+    """Get all APIs classified as safe during STW.
+
+    On 3.14+ free-threading builds, allocation APIs are also safe
+    (GC runs only on eval breaker, not during allocation).
+    Conditionally-safe exception APIs are treated as safe by the
+    scanner (the "no exception set" precondition cannot be verified
+    statically — the agent triages these).
+    """
     data = _load_stw_apis()
     safe = set()
     for category in data.get("safe_during_stw", {}).values():
         if isinstance(category, list):
             safe.update(category)
+    # On 3.14+, allocation APIs are safe during STW.
+    alloc_314 = data.get("safe_allocation_on_314", {})
+    safe_alloc = alloc_314.get("safe_if_builtin_types_only", [])
+    if isinstance(safe_alloc, list):
+        safe.update(safe_alloc)
+    # Conditionally-safe exception APIs — scanner treats as safe,
+    # agent triages the preconditions.
+    exc = data.get("unsafe_during_stw", {}).get("exception_setting", {})
+    cond_safe = exc.get("conditionally_safe_during_stw", {})
+    if isinstance(cond_safe, dict):
+        for api_name, condition in cond_safe.items():
+            if not api_name.startswith("_"):
+                safe.add(api_name)
     return safe
 
 
+def _extract_apis_from_value(value: object) -> set[str]:
+    """Extract API names from a data file value (list or dict with sub-lists)."""
+    apis = set()
+    if isinstance(value, list):
+        apis.update(value)
+    elif isinstance(value, dict):
+        # Handle nested structures like exception_setting with sub-categories.
+        for sub_val in value.values():
+            if isinstance(sub_val, list):
+                apis.update(sub_val)
+            elif isinstance(sub_val, str):
+                # Conditional entries like "PyErr_NoMemory": "Safe IF..."
+                # The key itself is the API name.
+                pass
+        # Also extract keys from conditional entries.
+        for sub_key, sub_val in value.items():
+            if isinstance(sub_val, str) and not sub_key.startswith("_"):
+                apis.add(sub_key)
+    return apis
+
+
 def _get_unsafe_apis() -> set[str]:
-    """Get all APIs classified as unsafe during STW."""
+    """Get all APIs classified as unsafe during STW.
+
+    Excludes APIs that are in the safe set (safe wins — e.g.,
+    allocation APIs are safe on 3.14+ even though they were
+    unsafe on older versions).
+    """
     data = _load_stw_apis()
     unsafe = set()
     for category in data.get("unsafe_during_stw", {}).values():
-        if isinstance(category, list):
-            unsafe.update(category)
+        unsafe.update(_extract_apis_from_value(category))
+    # Remove anything that's classified as safe (3.14+ overrides).
+    safe = _get_safe_apis()
+    unsafe -= safe
     return unsafe
 
 
@@ -65,8 +113,8 @@ def _get_unsafe_apis_for_propagation() -> set[str]:
     data = _load_stw_apis()
     unsafe = set()
     for cat_name, apis in data.get("unsafe_during_stw", {}).items():
-        if isinstance(apis, list) and cat_name != "stw_start":
-            unsafe.update(apis)
+        if cat_name != "stw_start":
+            unsafe.update(_extract_apis_from_value(apis))
     return unsafe
 
 
@@ -75,8 +123,9 @@ def _get_unsafe_categories() -> dict[str, set[str]]:
     data = _load_stw_apis()
     categories: dict[str, set[str]] = {}
     for cat_name, apis in data.get("unsafe_during_stw", {}).items():
-        if isinstance(apis, list):
-            categories[cat_name] = set(apis)
+        extracted = _extract_apis_from_value(apis)
+        if extracted:
+            categories[cat_name] = extracted
     return categories
 
 

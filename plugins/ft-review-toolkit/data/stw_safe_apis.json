@@ -93,7 +93,27 @@
       "PyMapping_GetItemString",
       "PyImport_ImportModule", "PyImport_Import"
     ],
-    "may_trigger_gc_or_alloc": [
+    "allocation_note": "REVISION (2026-04-04): On Python 3.14+ free-threading builds, object allocation does NOT trigger GC synchronously. GC runs only on the eval breaker in the bytecode loop (since 3.12, commit 83eb827247dd), and _PyObject_GC_TRACK does not call _Py_TriggerGC on Py_GIL_DISABLED builds. Analysis by YiFei Zhu (guppy3 maintainer) tracing PyType_GenericAlloc paths through 3.10→3.15. The APIs below are SAFE for allocation purposes on 3.14+, but remain unsafe if they invoke Python code (e.g., __init__, __hash__). See safe_allocation_on_314 below.",
+
+    "safe_allocation_on_314": {
+      "_comment": "These APIs allocate but do NOT trigger GC on 3.14+ free-threading builds. Safe during STW for allocation purposes. Still unsafe if they invoke Python callbacks (__init__, __del__, __hash__, __eq__).",
+      "safe_if_builtin_types_only": [
+        "PyObject_GC_New", "PyObject_GC_NewVar",
+        "PyObject_New", "PyObject_NewVar",
+        "PyObject_Malloc", "PyObject_Realloc",
+        "PyList_New", "PyTuple_New", "PyTuple_Pack",
+        "PyDict_New", "PyDict_Copy",
+        "PySet_New", "PyFrozenSet_New",
+        "PyUnicode_FromString", "PyUnicode_FromFormat",
+        "PyBytes_FromString", "PyBytes_FromStringAndSize",
+        "PyLong_FromLong", "PyLong_FromSsize_t", "PyLong_FromDouble",
+        "PyFloat_FromDouble",
+        "Py_BuildValue",
+        "PyStructSequence_New"
+      ]
+    },
+
+    "may_trigger_gc_or_alloc_pre314": [
       "PyObject_GC_New", "PyObject_GC_NewVar",
       "PyObject_GC_Track", "PyObject_GC_UnTrack",
       "PyObject_New", "PyObject_NewVar",
@@ -108,15 +128,27 @@
       "Py_BuildValue",
       "PyStructSequence_New"
     ],
-    "exception_setting": [
-      "PyErr_SetString", "PyErr_SetObject", "PyErr_Format",
-      "PyErr_NoMemory", "PyErr_SetFromErrno",
-      "PyErr_Occurred", "PyErr_Clear",
-      "PyErr_Fetch", "PyErr_Restore",
-      "PyErr_GetRaisedException", "PyErr_SetRaisedException",
-      "PyErr_CheckSignals", "PyErr_NewException",
-      "PyErr_SetFromWindowsErr"
-    ],
+    "exception_setting": {
+      "_comment": "REVISION (2026-04-04): PyErr_NoMemory is conditionally safe during STW on 3.14+. It only reads a thread-local, gets a singleton, and calls Py_XDECREF(tstate->current_exception). The Py_XDECREF is safe IF no exception is currently set (the common case during STW traversal). If a previous exception IS set and its type has a __del__, the decref could invoke Python code. Rule: ensure no exception is set before calling PyErr_NoMemory during STW. Other PyErr_* functions that use format strings with %R/%S invoke PyObject_Repr/Str — unsafe.",
+      "always_unsafe_during_stw": [
+        "PyErr_Format",
+        "PyErr_SetFromErrno",
+        "PyErr_CheckSignals",
+        "PyErr_NewException",
+        "PyErr_SetFromWindowsErr"
+      ],
+      "conditionally_safe_during_stw": {
+        "PyErr_NoMemory": "Safe IF no exception is currently set. Py_XDECREF(tstate->current_exception) could invoke __del__ on custom exception types.",
+        "PyErr_SetString": "Safe IF the exception type is a built-in type (no custom __init__) and no previous exception is set.",
+        "PyErr_SetObject": "Safe IF both exception type and value are built-in types and no previous exception is set.",
+        "PyErr_Occurred": "Safe — only reads tstate->current_exception (thread-local).",
+        "PyErr_Clear": "Conditionally safe — calls Py_XDECREF on current exception. Same __del__ risk as PyErr_NoMemory."
+      },
+      "unsafe_during_stw": [
+        "PyErr_Fetch", "PyErr_Restore",
+        "PyErr_GetRaisedException", "PyErr_SetRaisedException"
+      ]
+    },
     "container_mutation": [
       "PyList_Append", "PyList_Insert", "PyList_SetSlice",
       "PyList_Sort", "PyList_Reverse",
@@ -141,23 +173,33 @@
   },
 
   "stw_contract": {
-    "summary": "During _PyEval_StopTheWorld, all other threads are suspended at safe points. The calling thread has exclusive access to all Python objects. However, any operation that could re-enter the Python interpreter, trigger garbage collection, or set exceptions is unsafe because it may deadlock, corrupt interpreter state, or violate the assumption that no other code is running.",
+    "summary": "During _PyEval_StopTheWorld, all other threads are suspended at safe points. The calling thread has exclusive access to all Python objects. Operations that invoke Python code (__getattr__, __hash__, __eq__, __str__, __del__) are always unsafe. On Python 3.14+ free-threading builds, object ALLOCATION is safe (GC only runs on the eval breaker, not during allocation). Exception setting is conditionally safe (see details).",
     "rules": [
       "Do NOT call any Python/C API that could invoke Python code (__getattr__, __hash__, __eq__, __str__, etc.)",
-      "Do NOT set exceptions (PyErr_*) — CPython's GC explicitly calls StartTheWorld before PyErr_NoMemory",
-      "Do NOT allocate Python objects (PyList_New, PyDict_New, etc.) — may trigger GC which expects threads to be running",
       "Do NOT call _PyEval_StopTheWorld again (nested STW deadlocks)",
+      "On 3.14+: Object allocation (PyList_New, PyDict_New, etc.) IS safe — GC runs only on eval breaker, not during allocation",
+      "On <3.14: Object allocation may trigger GC — avoid during STW",
+      "PyErr_NoMemory IS safe during STW IF no exception is currently set (Py_XDECREF on current_exception could invoke __del__)",
+      "PyErr_SetString/SetObject IS safe during STW IF exception type is built-in AND no previous exception is set",
+      "PyErr_Format with %R/%S is NEVER safe during STW (invokes PyObject_Repr/Str)",
+      "Dict operations with CheckExact types (PyDict_SetItem on builtin keys/values) are safe — no __hash__/__eq__ callbacks",
       "DO use direct struct access (Py_TYPE, PyTuple_GET_ITEM, etc.) for reading object state",
       "DO use Py_INCREF/Py_DECREF for reference counting",
       "DO use PyMem_Malloc/PyMem_Free for raw C memory allocation",
       "DO use _Py_atomic_* for atomic operations",
-      "DO call _PyEval_StartTheWorld before returning to Python or reporting errors",
-      "Pattern: StopTheWorld → traverse/read → StartTheWorld → process results/set errors/allocate"
+      "DO call _PyEval_StartTheWorld before returning to Python or invoking non-builtin Python code"
     ],
     "cpython_evidence": {
-      "gc_free_threading.c:2223": "_PyEval_StartTheWorld called BEFORE PyErr_NoMemory — exceptions unsafe during STW",
+      "gc_free_threading.c:2223": "_PyEval_StartTheWorld called BEFORE PyErr_NoMemory — historically cautious, but analysis shows PyErr_NoMemory is safe IF no exception set (see revision note)",
       "gc_free_threading.c:2253": "_PyEval_StartTheWorld called BEFORE cleanup_worklist/call_weakref_callbacks — Python code unsafe during STW",
-      "gcmodule.c:287-289": "append_referrents runs during STW (reads only), result processing after StartTheWorld"
-    }
+      "gcmodule.c:287-289": "append_referrents runs during STW (reads only), result processing after StartTheWorld",
+      "commit 83eb827247dd (3.12)": "GC now runs only on eval breaker — object allocation no longer triggers GC synchronously",
+      "commit 0c01090ad957 (3.15/3.14.1)": "Removed last remaining gc_collect_generations call from _PyObject_GC_Link",
+      "_PyObject_GC_TRACK": "On Py_GIL_DISABLED builds, does NOT call _Py_TriggerGC — confirmed by YiFei Zhu tracing 3.14 source"
+    },
+    "revision_history": [
+      "2026-04-02: Initial contract — conservative, based on CPython GC's own StartTheWorld-before-PyErr_NoMemory pattern",
+      "2026-04-04: Revised based on YiFei Zhu's analysis — allocation safe on 3.14+ (GC eval-breaker-only), PyErr_NoMemory conditionally safe, dict ops safe with CheckExact types"
+    ]
   }
 }

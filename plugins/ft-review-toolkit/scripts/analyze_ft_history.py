@@ -23,6 +23,7 @@ import json
 import re
 import subprocess
 import sys
+import traceback
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -676,6 +677,7 @@ def main() -> None:
         json.dump(result, sys.stdout, indent=2)
         sys.stdout.write("\n")
     except Exception as e:
+        print(traceback.format_exc(), file=sys.stderr)
         json.dump({"error": str(e), "type": type(e).__name__}, sys.stdout, indent=2)
         sys.stdout.write("\n")
         sys.exit(1)

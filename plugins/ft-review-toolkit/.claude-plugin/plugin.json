@@ -1,7 +1,7 @@
 {
   "name": "ft-review-toolkit",
   "version": "0.2.0",
-  "description": "Free-threading migration toolkit for CPython C extensions. Finds thread-safety bugs (data races, unprotected shared state, unsafe API usage, lock discipline issues), plans migrations to free-threaded Python (PEP 703), triages ThreadSanitizer reports, generates concurrent stress tests for TSan, and produces readiness assessments. 9 agents, 6 scripts, 3 commands. Tree-sitter-powered C/C++ parsing.",
+  "description": "Free-threading migration toolkit for CPython C extensions. Finds thread-safety bugs (data races, unprotected shared state, unsafe API usage, lock discipline issues), plans migrations to free-threaded Python (PEP 703), triages ThreadSanitizer reports, generates concurrent stress tests for TSan, and produces readiness assessments. 10 agents, 7 scripts, 3 commands. Tree-sitter-powered C/C++ parsing.",
   "author": {
     "name": "Danzin"
   }

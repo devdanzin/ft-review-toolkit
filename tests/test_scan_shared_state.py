@@ -245,8 +245,8 @@ class TestScanSharedState(unittest.TestCase):
             init_findings = [
                 f for f in result["findings"] if f["variable"] == "initialized"
             ]
-            if init_findings:
-                self.assertIn(init_findings[0]["severity"], ("LOW",))
+            self.assertTrue(len(init_findings) > 0, "Expected init-only findings")
+            self.assertIn(init_findings[0]["severity"], ("LOW",))
 
     def test_lock_protected_noted(self):
         """Lock-protected variables are noted in findings."""

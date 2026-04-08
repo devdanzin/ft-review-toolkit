@@ -35,7 +35,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `_PyEval_StopTheWorld`/`_PyEval_StartTheWorld` pairing in lock discipline scanner
 - Enhanced `stop-the-world-advisor` with STW safety contract guidance
 
+### Fixed
+- Silent data-loading failures in 4 scanners: `scan_shared_state.py`, `scan_unsafe_apis.py`, `scan_lock_discipline.py`, `scan_stw_safety.py` now warn to stderr when JSON data files fail to load instead of silently producing zero findings.
+- Conditional test assertions in `test_scan_shared_state.py` and `test_scan_atomic_candidates.py` that silently passed when no findings were produced.
+- Plugin metadata counts in `plugin.json` (9 agents → 10, 6 scripts → 7).
+- Missing `test_output_envelope` assertions for `functions_analyzed` and `skipped_files` in `test_scan_lock_discipline.py` and `test_scan_atomic_candidates.py`.
+- Redundant `source_bytes.decode()` called twice per declaration in `scan_shared_state.py:_analyze_file`.
+
 ### Enhanced
+- All 7 `main()` functions now print full tracebacks to stderr before outputting JSON error envelopes, improving debuggability.
+- Extracted duplicated helpers (`is_thread_local`, `is_init_function`, `is_in_region`) from individual scanners into `scan_common.py`, eliminating copy-paste across `scan_shared_state.py`, `scan_atomic_candidates.py`, `scan_unsafe_apis.py`, and `scan_stw_safety.py`.
+- Documented JSON envelope variants for `parse_tsan_report.py`, `analyze_ft_history.py`, and `scan_stw_safety.py` in CLAUDE.md.
+- Listed all script-backed agents explicitly in CLAUDE.md agents section.
+
+### Enhanced (previous)
 - Revised STW safety contract based on YiFei Zhu's analysis of CPython allocation paths: object allocation is safe during STW on Python 3.14+ (GC runs only on eval breaker), `PyErr_NoMemory`/`PyErr_SetString` conditionally safe, dict ops safe with `CheckExact` types. Updated `stw_safe_apis.json`, `scan_stw_safety.py`, and tests.
 - Port cext-review-toolkit enhancements: global non-restarting finding numbering in `explore` reports (cext #33), `extract_nearby_comments()`/`has_safety_annotation()` in `scan_common.py` for comment-aware triage (cext #30), enhanced deduplication guidance with intra-agent, cross-agent, and TSan dedup rules (cext #28).
 

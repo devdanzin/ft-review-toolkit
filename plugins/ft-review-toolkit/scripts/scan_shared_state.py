@@ -10,12 +10,18 @@ Usage:
 """
 
 import json
-import re
 import sys
+import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from scan_common import discover_c_files, find_project_root, parse_common_args
+from scan_common import (
+    discover_c_files,
+    find_project_root,
+    is_init_function,
+    is_thread_local,
+    parse_common_args,
+)
 from tree_sitter_utils import (
     extract_functions,
     extract_static_declarations,
@@ -25,19 +31,6 @@ from tree_sitter_utils import (
 )
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-
-_INIT_FUNCTION_PATTERNS = re.compile(
-    r"^(PyInit_\w+|PyMODINIT_FUNC|module_init|init_\w+|_init\w*|exec_\w+)$"
-)
-
-_THREAD_LOCAL_KEYWORDS = frozenset(
-    {
-        "__thread",
-        "_Thread_local",
-        "thread_local",
-        "_Py_thread_local",
-    }
-)
 
 _LOCK_APIS: set[str] = set()
 
@@ -52,22 +45,16 @@ def _load_lock_apis() -> set[str]:
             data = json.load(f)
         _LOCK_APIS = set(data.get("all_acquire_macros", []))
         _LOCK_APIS |= set(data.get("all_release_macros", []))
-    except (OSError, json.JSONDecodeError):
-        pass
+    except (OSError, json.JSONDecodeError) as e:
+        print(
+            f"Warning: failed to load lock_macros.json: {e}",
+            file=sys.stderr,
+        )
     return _LOCK_APIS
 
 
-def _is_thread_local(decl_type: str, source_line: str) -> bool:
-    """Check if a declaration uses thread-local storage."""
-    for kw in _THREAD_LOCAL_KEYWORDS:
-        if kw in decl_type or kw in source_line:
-            return True
-    return False
-
-
-def _is_init_function(name: str) -> bool:
-    """Check if a function name looks like a module init function."""
-    return bool(_INIT_FUNCTION_PATTERNS.match(name))
+_is_thread_local = is_thread_local
+_is_init_function = is_init_function
 
 
 def _classify_declaration(decl: dict) -> str:
@@ -186,14 +173,14 @@ def _analyze_file(filepath: Path, source_bytes: bytes) -> list[dict]:
     for f in findings:
         f["file"] = rel_path
 
+    # Decode once for source line lookups.
+    source_lines = source_bytes.decode("utf-8", errors="replace").splitlines()
+
     # Analyze each static declaration.
     for decl in static_decls:
         source_line = (
-            source_bytes.decode("utf-8", errors="replace").splitlines()[
-                decl["start_line"] - 1
-            ]
-            if decl["start_line"]
-            <= len(source_bytes.decode("utf-8", errors="replace").splitlines())
+            source_lines[decl["start_line"] - 1]
+            if decl["start_line"] <= len(source_lines)
             else ""
         )
 
@@ -441,6 +428,7 @@ def main() -> None:
         json.dump(result, sys.stdout, indent=2)
         sys.stdout.write("\n")
     except Exception as e:
+        print(traceback.format_exc(), file=sys.stderr)
         json.dump({"error": str(e), "type": type(e).__name__}, sys.stdout, indent=2)
         sys.stdout.write("\n")
         sys.exit(1)

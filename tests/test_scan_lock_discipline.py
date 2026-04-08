@@ -287,8 +287,10 @@ class TestScanLockDiscipline(unittest.TestCase):
             self.assertIn("project_root", result)
             self.assertIn("scan_root", result)
             self.assertIn("files_analyzed", result)
+            self.assertIn("functions_analyzed", result)
             self.assertIn("findings", result)
             self.assertIn("summary", result)
+            self.assertIn("skipped_files", result)
 
 
 if __name__ == "__main__":

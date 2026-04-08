@@ -187,15 +187,14 @@ class TestScanAtomicCandidates(unittest.TestCase):
             ]
             self.assertEqual(len(protect), 0)
 
-    def test_init_only_lower_severity(self):
-        """Init-only variable gets SAFE classification."""
+    def test_init_only_not_flagged(self):
+        """Init-only primitive variable is not flagged as atomic candidate."""
         with TempExtension({"init.c": INIT_ONLY_VAR}) as root:
             result = ac.analyze(str(root))
             findings = [
                 f for f in result["findings"] if f["variable"] == "module_version"
             ]
-            if findings:
-                self.assertEqual(findings[0]["classification"], "SAFE")
+            self.assertEqual(len(findings), 0)
 
     def test_const_not_flagged(self):
         """Const variable is not flagged."""
@@ -220,8 +219,10 @@ class TestScanAtomicCandidates(unittest.TestCase):
             self.assertIn("project_root", result)
             self.assertIn("scan_root", result)
             self.assertIn("files_analyzed", result)
+            self.assertIn("functions_analyzed", result)
             self.assertIn("findings", result)
             self.assertIn("summary", result)
+            self.assertIn("skipped_files", result)
 
 
 if __name__ == "__main__":

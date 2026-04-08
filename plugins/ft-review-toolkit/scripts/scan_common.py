@@ -6,6 +6,7 @@ API table loading, and AST helpers used across multiple scanner scripts.
 """
 
 import json
+import re
 import sys
 from collections.abc import Generator
 from pathlib import Path
@@ -143,6 +144,35 @@ def find_assigned_variable(call_node, source_bytes: bytes) -> str | None:
             break
         node = node.parent
     return None
+
+
+_INIT_FUNCTION_RE = re.compile(
+    r"^(PyInit_\w+|PyMODINIT_FUNC|module_init|init_\w+|_init\w*|exec_\w+)$"
+)
+
+_THREAD_LOCAL_KEYWORDS = frozenset(
+    {
+        "__thread",
+        "_Thread_local",
+        "thread_local",
+        "_Py_thread_local",
+    }
+)
+
+
+def is_thread_local(decl_type: str, source_line: str) -> bool:
+    """Check if a declaration uses thread-local storage."""
+    return any(kw in decl_type or kw in source_line for kw in _THREAD_LOCAL_KEYWORDS)
+
+
+def is_init_function(name: str) -> bool:
+    """Check if a function name looks like a module init function."""
+    return bool(_INIT_FUNCTION_RE.match(name))
+
+
+def is_in_region(offset: int, regions: list[tuple[int, int]]) -> bool:
+    """Check if a byte offset falls within any of the given regions."""
+    return any(start <= offset < end for start, end in regions)
 
 
 def extract_nearby_comments(

@@ -14,6 +14,7 @@ Usage:
 import json
 import re
 import sys
+import traceback
 from pathlib import Path
 
 
@@ -393,6 +394,7 @@ def main() -> None:
         json.dump(result, sys.stdout, indent=2)
         sys.stdout.write("\n")
     except Exception as e:
+        print(traceback.format_exc(), file=sys.stderr)
         json.dump({"error": str(e), "type": type(e).__name__}, sys.stdout, indent=2)
         sys.stdout.write("\n")
         sys.exit(1)

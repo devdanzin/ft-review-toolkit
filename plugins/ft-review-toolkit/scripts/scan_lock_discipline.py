@@ -11,6 +11,7 @@ Usage:
 import json
 import re
 import sys
+import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -36,7 +37,11 @@ def _load_lock_macros() -> dict:
     try:
         with open(_DATA_DIR / "lock_macros.json", encoding="utf-8") as f:
             _lock_data = json.load(f)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as e:
+        print(
+            f"Warning: failed to load lock_macros.json: {e}",
+            file=sys.stderr,
+        )
         _lock_data = {}
     return _lock_data
 
@@ -426,6 +431,7 @@ def main() -> None:
         json.dump(result, sys.stdout, indent=2)
         sys.stdout.write("\n")
     except Exception as e:
+        print(traceback.format_exc(), file=sys.stderr)
         json.dump({"error": str(e), "type": type(e).__name__}, sys.stdout, indent=2)
         sys.stdout.write("\n")
         sys.exit(1)

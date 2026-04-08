@@ -11,10 +11,17 @@ Usage:
 import json
 import re
 import sys
+import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from scan_common import discover_c_files, find_project_root, parse_common_args
+from scan_common import (
+    discover_c_files,
+    find_project_root,
+    is_init_function,
+    is_thread_local,
+    parse_common_args,
+)
 from tree_sitter_utils import (
     extract_functions,
     extract_static_declarations,
@@ -27,18 +34,8 @@ _ATOMIC_TYPE_PATTERNS = re.compile(
     r"_Py_atomic_\w+|std::atomic|_Atomic\b|atomic_\w+", re.IGNORECASE
 )
 
-_THREAD_LOCAL_KEYWORDS = frozenset(
-    {
-        "__thread",
-        "_Thread_local",
-        "thread_local",
-        "_Py_thread_local",
-    }
-)
-
-_INIT_FUNCTION_RE = re.compile(
-    r"^(PyInit_\w+|PyMODINIT_FUNC|module_init|init_\w+|_init\w*|exec_\w+)$"
-)
+_is_thread_local = is_thread_local
+_is_init_function = is_init_function
 
 _PRIMITIVE_TYPES = frozenset(
     {
@@ -68,19 +65,6 @@ _PRIMITIVE_TYPES = frozenset(
 def _is_atomic_type(decl_type: str) -> bool:
     """Check if a type is already an atomic type."""
     return bool(_ATOMIC_TYPE_PATTERNS.search(decl_type))
-
-
-def _is_thread_local(decl_type: str, source_line: str) -> bool:
-    """Check if a declaration uses thread-local storage."""
-    for kw in _THREAD_LOCAL_KEYWORDS:
-        if kw in decl_type or kw in source_line:
-            return True
-    return False
-
-
-def _is_init_function(name: str) -> bool:
-    """Check if a function name looks like a module init function."""
-    return bool(_INIT_FUNCTION_RE.match(name))
 
 
 def _is_primitive_type(decl_type: str) -> bool:
@@ -372,6 +356,7 @@ def main() -> None:
         json.dump(result, sys.stdout, indent=2)
         sys.stdout.write("\n")
     except Exception as e:
+        print(traceback.format_exc(), file=sys.stderr)
         json.dump({"error": str(e), "type": type(e).__name__}, sys.stdout, indent=2)
         sys.stdout.write("\n")
         sys.exit(1)

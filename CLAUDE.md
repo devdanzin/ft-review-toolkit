@@ -84,6 +84,8 @@ All scripts live in `plugins/ft-review-toolkit/scripts/`. Every analysis script 
 
 **Script calling convention:** Every analysis script exposes `analyze(target: str, *, max_files: int = 0) -> dict` returning a JSON envelope with `{project_root, scan_root, files_analyzed, functions_analyzed, findings, summary, skipped_files}`. Exception: `analyze_ft_history.py` takes `argv` (matching cext-review-toolkit convention). Exception: `parse_tsan_report.py` takes `target` as a TSan report file path, not a source directory.
 
+**Envelope variants:** `parse_tsan_report.py` uses a custom envelope (`report_path`, `total_warnings`, `unique_races`, `extension_races`, etc.) since it processes TSan text, not C source. `analyze_ft_history.py` uses a custom envelope (`time_range`, `migration_timeline`, `ft_commit_details`, `file_churn`, etc.) since it processes git history. `scan_stw_safety.py` extends the standard envelope with `stw_functions` and `function_classifications`.
+
 ### Classification system
 
 Every finding is tagged with a classification and severity:
@@ -94,7 +96,7 @@ Severities: **CRITICAL**, **HIGH**, **MEDIUM**, **LOW**
 
 ### Agents
 
-Markdown files in `plugins/ft-review-toolkit/agents/`. YAML frontmatter with `name`, `description` (with `<example>` tags), `model: opus`, `color`. Script-backed agents have 3 phases: run scanner, triage findings, pattern review beyond script. Qualitative agents (stop-the-world-advisor, migration-planner, tsan-stress-generator) use Grep/Read/Bash directly.
+Markdown files in `plugins/ft-review-toolkit/agents/`. YAML frontmatter with `name`, `description` (with `<example>` tags), `model: opus`, `color`. Script-backed agents (shared-state-auditor, unsafe-api-detector, lock-discipline-checker, atomic-candidate-finder, tsan-report-analyzer, ft-history-analyzer, stw-safety-checker) have 3 phases: run scanner, triage findings, pattern review beyond script. Qualitative agents (stop-the-world-advisor, migration-planner, tsan-stress-generator) use Grep/Read/Bash directly.
 
 ## Testing notes
 - All tests use `unittest` — never pytest

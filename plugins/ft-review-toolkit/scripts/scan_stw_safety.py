@@ -12,10 +12,16 @@ Usage:
 import json
 import re
 import sys
+import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from scan_common import discover_c_files, find_project_root, parse_common_args
+from scan_common import (
+    discover_c_files,
+    find_project_root,
+    is_in_region,
+    parse_common_args,
+)
 from tree_sitter_utils import (
     extract_functions,
     find_calls_in_scope,
@@ -35,7 +41,11 @@ def _load_stw_apis() -> dict:
     try:
         with open(_DATA_DIR / "stw_safe_apis.json", encoding="utf-8") as f:
             _stw_data = json.load(f)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as e:
+        print(
+            f"Warning: failed to load stw_safe_apis.json: {e}",
+            file=sys.stderr,
+        )
         _stw_data = {}
     return _stw_data
 
@@ -153,12 +163,7 @@ def _find_stw_regions(body_text: str) -> list[tuple[int, int]]:
     return regions
 
 
-def _is_in_region(offset: int, regions: list[tuple[int, int]]) -> bool:
-    """Check if a byte offset falls within any of the given regions."""
-    for start, end in regions:
-        if start <= offset < end:
-            return True
-    return False
+_is_in_region = is_in_region
 
 
 def _classify_call(func_name: str, safe_apis: set[str], unsafe_apis: set[str]) -> str:
@@ -509,6 +514,7 @@ def main() -> None:
         json.dump(result, sys.stdout, indent=2)
         sys.stdout.write("\n")
     except Exception as e:
+        print(traceback.format_exc(), file=sys.stderr)
         json.dump({"error": str(e), "type": type(e).__name__}, sys.stdout, indent=2)
         sys.stdout.write("\n")
         sys.exit(1)

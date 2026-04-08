@@ -37,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Enhanced
 - Revised STW safety contract based on YiFei Zhu's analysis of CPython allocation paths: object allocation is safe during STW on Python 3.14+ (GC runs only on eval breaker), `PyErr_NoMemory`/`PyErr_SetString` conditionally safe, dict ops safe with `CheckExact` types. Updated `stw_safe_apis.json`, `scan_stw_safety.py`, and tests.
+- Port cext-review-toolkit enhancements: global non-restarting finding numbering in `explore` reports (cext #33), `extract_nearby_comments()`/`has_safety_annotation()` in `scan_common.py` for comment-aware triage (cext #30), enhanced deduplication guidance with intra-agent, cross-agent, and TSan dedup rules (cext #28).
 
 ### Fixed
 - Remove `tsan-stress-generator` from `explore` pipeline Group C. It produces a script (not findings) that must be executed externally before its output is useful. Available as standalone aspect (`explore . stress-test`).

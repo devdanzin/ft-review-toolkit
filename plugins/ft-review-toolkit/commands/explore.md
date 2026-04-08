@@ -76,28 +76,36 @@ Combine all findings into a structured report.
 - **PROTECT findings**: [N] — shared state needing protection
 - **MIGRATE findings**: [N] — structural changes needed
 
-## RACE Findings (fix immediately)
+## Findings by Priority
 
-### 1. [Title]
-- **File**: `path/to/file.c:123`
-- **Severity**: CRITICAL
-- **Description**: ...
-- **Fix**: ...
+**Use global non-restarting numbering**: number ALL findings sequentially across
+all sections. RACE findings first (1-N), then UNSAFE (N+1-M), then PROTECT
+(M+1-P), then MIGRATE (P+1-Q). Use these same numbers in the Recommendations
+section. This makes it easy to reference "Finding 12" in issue trackers and emails.
 
-## UNSAFE Findings (fix before declaring free-threading support)
+### RACE Findings (fix immediately) — N
 
-### 1. [Title]
-...
+| # | Finding | File:Line | Severity | Agents |
+|---|---------|-----------|----------|--------|
+| 1 | [Description] | [file:line] | CRITICAL/HIGH | [which agents found it] |
 
-## PROTECT Findings (add synchronization)
+### UNSAFE Findings (fix before declaring free-threading support) — M
 
-### 1. [Title]
-...
+| # | Finding | File:Line | Severity |
+|---|---------|-----------|----------|
+| N+1 | [Description] | [file:line] | HIGH/MEDIUM |
 
-## MIGRATE Findings (structural changes)
+### PROTECT Findings (add synchronization) — P
 
-### 1. [Title]
-...
+| # | Finding | File:Line | Severity |
+|---|---------|-----------|----------|
+| M+1 | [Description] | [file:line] | HIGH/MEDIUM |
+
+### MIGRATE Findings (structural changes) — Q
+
+| # | Finding | File:Line | Severity |
+|---|---------|-----------|----------|
+| P+1 | [Description] | [file:line] | MEDIUM/LOW |
 
 ## SAFE Patterns (confirmed safe)
 
@@ -106,9 +114,17 @@ Combine all findings into a structured report.
 
 ## Recommendations
 
-1. [Highest priority action]
-2. [Next]
-3. [Next]
+Reference findings by their global number:
+
+### Immediate (RACE + UNSAFE items)
+1. [Fix Finding N — description]
+2. [Fix Finding M — description]
+
+### Short-term (PROTECT items)
+3. [Finding P — description]
+
+### Longer-term (MIGRATE items)
+4. [Finding Q — description]
 
 For a phased migration plan:
   /ft-review-toolkit:plan [scope]
@@ -116,10 +132,29 @@ For a phased migration plan:
 
 ## Deduplication Rules
 
-When the same issue is flagged by multiple agents, count it once:
+When the same issue is flagged by multiple agents, count it once under the
+highest-priority classification. Note which agents found it in the "Agents"
+column to show cross-validation.
+
+**Cross-agent dedup:**
 - `non_atomic_shared_flag` (shared-state) + `non_atomic_shared_bool` (atomics) → report once under atomics
 - `unprotected_global_pyobject` (shared-state) + `container_mutation_unprotected` (unsafe-apis) → combine into one finding
 - `critical_section_candidate` (locks) + shared state findings → enhance the lock finding with shared state context
+
+**Intra-agent dedup:**
+- Same bug pattern repeated in template-generated code (e.g., 4 dtype-specialized variants of the same function) → report once with `duplicate_count: 4` and list all locations
+- Same lazy-init pattern across N functions → report as one finding ("N lazy-init static string caches") with a table of locations, not N separate findings
+
+**TSan dedup:**
+- Same `(file:line, file:line)` race pair appearing multiple times → count as one unique race
+- Same root cause manifesting in different functions → group under one finding with a frequency count
+
+**Nearby comments:**
+When flagging a finding, check if nearby source comments (within ±5 lines)
+contain safety annotations like "intentional", "safe because", "by design",
+"not a bug", "deliberately". If found, lower the confidence to "low" and
+note the annotation in the finding. The scanners' `extract_nearby_comments()`
+and `has_safety_annotation()` functions support this.
 
 ## Usage
 

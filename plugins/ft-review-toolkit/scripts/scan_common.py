@@ -145,6 +145,61 @@ def find_assigned_variable(call_node, source_bytes: bytes) -> str | None:
     return None
 
 
+def extract_nearby_comments(
+    source_bytes: bytes, tree: object, line: int, radius: int = 5
+) -> list[str]:
+    """Extract comments within ±radius lines of the given line.
+
+    Uses Tree-sitter to find comment nodes. Returns list of comment
+    text strings (stripped of comment markers).
+    """
+    comments: list[str] = []
+    min_line = max(0, line - radius - 1)  # 0-indexed
+    max_line = line + radius - 1
+
+    def _walk(node: object) -> None:
+        if node.type == "comment":  # type: ignore[attr-defined]
+            node_line = node.start_point[0]  # type: ignore[attr-defined]
+            if min_line <= node_line <= max_line:
+                text = source_bytes[
+                    node.start_byte : node.end_byte  # type: ignore[attr-defined]
+                ].decode("utf-8", errors="replace")
+                comments.append(text)
+        for child in node.children:  # type: ignore[attr-defined]
+            _walk(child)
+
+    _walk(tree.root_node)  # type: ignore[attr-defined]
+    return comments
+
+
+_SAFETY_KEYWORDS = {
+    "safety:",
+    "safe because",
+    "intentional",
+    "by design",
+    "nolint",
+    "checked:",
+    "correct because",
+    "this is safe",
+    "not a bug",
+    "deliberately",
+    "expected",
+    "thread-safe",
+    "already protected",
+    "mutex held",
+    "lock held",
+}
+
+
+def has_safety_annotation(comments: list[str]) -> bool:
+    """Check if any comment contains a safety annotation keyword."""
+    for comment in comments:
+        lower = comment.lower()
+        if any(kw in lower for kw in _SAFETY_KEYWORDS):
+            return True
+    return False
+
+
 def parse_common_args(argv: list[str]) -> tuple[str, int]:
     """Parse common CLI arguments (path and --max-files).
 

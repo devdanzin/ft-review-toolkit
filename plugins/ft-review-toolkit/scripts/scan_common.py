@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Vendored from cext-review-toolkit, upstream commit 1475ac6
+# https://github.com/devdanzin/cext-review-toolkit
+# ft-review-toolkit additions: is_thread_local, is_init_function, is_in_region,
+# extract_nearby_comments, has_safety_annotation, make_finding
 """Shared utilities for cext-review-toolkit analysis scripts.
 
 Provides common infrastructure: project root detection, C file discovery,
@@ -228,6 +232,36 @@ def has_safety_annotation(comments: list[str]) -> bool:
         if any(kw in lower for kw in _SAFETY_KEYWORDS):
             return True
     return False
+
+
+def make_finding(
+    finding_type: str,
+    *,
+    function: str = "",
+    line: int = 0,
+    classification: str,
+    severity: str,
+    confidence: str = "high",
+    detail: str,
+    **extra: object,
+) -> dict:
+    """Create a finding dict with consistent key naming.
+
+    All scanners produce findings as dicts with a common structure.
+    This helper ensures consistent keys and allows scanner-specific
+    extra fields via **extra.
+    """
+    finding: dict = {
+        "type": finding_type,
+        "function": function,
+        "line": line,
+        "classification": classification,
+        "severity": severity,
+        "confidence": confidence,
+        "detail": detail,
+    }
+    finding.update(extra)
+    return finding
 
 
 def parse_common_args(argv: list[str]) -> tuple[str, int]:

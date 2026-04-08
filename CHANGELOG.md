@@ -35,7 +35,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `_PyEval_StopTheWorld`/`_PyEval_StartTheWorld` pairing in lock discipline scanner
 - Enhanced `stop-the-world-advisor` with STW safety contract guidance
 
+### Added
+- `test_scan_common.py` — 22 tests covering `discover_c_files`, `find_project_root`, `parse_common_args`, `is_thread_local`, `is_init_function`, `is_in_region`, `extract_nearby_comments`, `has_safety_annotation`, `make_finding`.
+- `test_tree_sitter_utils.py` — 18 tests covering `extract_functions`, `extract_static_declarations`, `find_calls_in_scope`, `parse_bytes_for_file`, `get_node_text`, `strip_comments`.
+- `make_finding()` helper in `scan_common.py` for consistent finding dict construction across all scanners.
+- Version/commit tags on vendored files (`tree_sitter_utils.py`, `scan_common.py`) indicating upstream cext-review-toolkit commit `1475ac6`.
+
 ### Fixed
+- `_run_git_streaming` return code now checked in `analyze_ft_history.py` — failed git commands warn to stderr instead of silently producing empty results.
 - Silent data-loading failures in 4 scanners: `scan_shared_state.py`, `scan_unsafe_apis.py`, `scan_lock_discipline.py`, `scan_stw_safety.py` now warn to stderr when JSON data files fail to load instead of silently producing zero findings.
 - Conditional test assertions in `test_scan_shared_state.py` and `test_scan_atomic_candidates.py` that silently passed when no findings were produced.
 - Plugin metadata counts in `plugin.json` (9 agents → 10, 6 scripts → 7).
@@ -47,6 +54,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Extracted duplicated helpers (`is_thread_local`, `is_init_function`, `is_in_region`) from individual scanners into `scan_common.py`, eliminating copy-paste across `scan_shared_state.py`, `scan_atomic_candidates.py`, `scan_unsafe_apis.py`, and `scan_stw_safety.py`.
 - Documented JSON envelope variants for `parse_tsan_report.py`, `analyze_ft_history.py`, and `scan_stw_safety.py` in CLAUDE.md.
 - Listed all script-backed agents explicitly in CLAUDE.md agents section.
+
+- Simplified `_check_error_path_releases` in `scan_lock_discipline.py` — extracted `_has_release_via_goto()` helper, replaced manual loop with `any()`.
 
 ### Enhanced (previous)
 - Revised STW safety contract based on YiFei Zhu's analysis of CPython allocation paths: object allocation is safe during STW on Python 3.14+ (GC runs only on eval breaker), `PyErr_NoMemory`/`PyErr_SetString` conditionally safe, dict ops safe with `CheckExact` types. Updated `stw_safe_apis.json`, `scan_stw_safety.py`, and tests.

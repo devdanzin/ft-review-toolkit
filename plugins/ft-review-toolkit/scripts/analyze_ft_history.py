@@ -593,6 +593,12 @@ def analyze(argv: list[str] | None = None) -> dict:
         commits, file_changes = parse_git_log(proc.stdout, max_commits, project_root)
     finally:
         proc.wait()
+    if proc.returncode != 0:
+        stderr_output = proc.stderr.read() if proc.stderr else ""
+        print(
+            f"Warning: git log failed (exit {proc.returncode}): {stderr_output}",
+            file=sys.stderr,
+        )
 
     # Filter to free-threading related commits.
     ft_commits = [c for c in commits if c.get("ft_type") is not None]

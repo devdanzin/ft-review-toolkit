@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Vendored from cext-review-toolkit, upstream commit 1475ac6
+# https://github.com/devdanzin/cext-review-toolkit
 """Tree-sitter parsing utilities for C/C++ extension analysis.
 
 This is the core parsing module used by all analysis scripts in

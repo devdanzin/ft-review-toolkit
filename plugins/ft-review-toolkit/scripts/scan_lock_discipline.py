@@ -155,6 +155,23 @@ def _check_lock_pairing(func: dict, source_bytes: bytes) -> list[dict]:
     return findings
 
 
+def _has_release_via_goto(
+    span: str, body_text: str, expected_releases: list[str]
+) -> bool:
+    """Check if a goto in span jumps to a label that releases the lock."""
+    if "goto" not in span:
+        return False
+    goto_match = re.search(r"goto\s+(\w+)", span)
+    if not goto_match:
+        return False
+    label = goto_match.group(1)
+    label_match = re.search(rf"{re.escape(label)}\s*:", body_text)
+    if not label_match:
+        return False
+    after_label = body_text[label_match.end() :]
+    return any(rel_name in after_label for rel_name in expected_releases)
+
+
 def _check_error_path_releases(func: dict, source_bytes: bytes) -> list[dict]:
     """Check that locks are released before error returns."""
     findings = []
@@ -205,28 +222,14 @@ def _check_error_path_releases(func: dict, source_bytes: bytes) -> list[dict]:
 
             span = body_text[acq_offset:ret_offset]
 
-            # Check if any expected release is in this span.
-            has_release_before_return = False
-            for rel_name in expected_releases:
-                if rel_name in span:
-                    has_release_before_return = True
-                    break
+            has_release_before_return = any(
+                rel_name in span for rel_name in expected_releases
+            )
 
-            # Also check for goto to cleanup label.
-            if not has_release_before_return and "goto" in span:
-                # Check if goto target releases the lock.
-                goto_match = re.search(r"goto\s+(\w+)", span)
-                if goto_match:
-                    label = goto_match.group(1)
-                    # Check if the label's code contains the release.
-                    label_pattern = rf"{re.escape(label)}\s*:"
-                    label_match = re.search(label_pattern, body_text)
-                    if label_match:
-                        after_label = body_text[label_match.end() :]
-                        for rel_name in expected_releases:
-                            if rel_name in after_label:
-                                has_release_before_return = True
-                                break
+            if not has_release_before_return:
+                has_release_before_return = _has_release_via_goto(
+                    span, body_text, expected_releases
+                )
 
             if not has_release_before_return:
                 ret_value = ret.get("value_text", "")

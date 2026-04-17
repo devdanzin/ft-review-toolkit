@@ -20,6 +20,8 @@ Free-threading work in the Python ecosystem spans CPython 3.12-3.14+ (2023-2026)
 
 ## Analysis Phases
 
+**Effort allocation: 60% similar-bug (incomplete-migration) detection / 15% fix-completeness review / 25% migration-timeline & churn.**
+
 ### Phase 1: Automated History Scan
 
 Run the free-threading history analyzer:
@@ -58,6 +60,38 @@ For each significant finding:
    - "paused" (30-180 days) — may need a nudge
    - "stalled" (>180 days) — investigate why
    - "not_started" — the migration hasn't begun
+
+### Phase 2b: Fix Completeness Review
+
+Before propagating a fix pattern to other files, verify that each ft-related fix is itself complete. For each recent ft-related fix (cap at 10):
+
+1. **Read the fix diff and commit message**: Understand what race or unsafe access was reported and exactly what the patch changes.
+
+2. **Check all error paths in the fixed function(s)**: Free-threading fixes frequently add a `Py_BEGIN_CRITICAL_SECTION` / `PyMutex_Lock` on the happy path but miss `goto error` / early-return branches. Verify every exit path preserves the new invariant (lock released, atomic store completed, refcount balanced).
+
+3. **Check all build variants**: The GIL-enabled and free-threaded build paths often diverge. Confirm the fix covers:
+   - `#ifdef Py_GIL_DISABLED` / `#ifndef Py_GIL_DISABLED` branches
+   - `#if defined(Py_NOGIL)` legacy guards
+   - Any `#if Py_GIL_DISABLED && ...` compound conditions
+   A fix applied only to the free-threaded branch leaves the default build racy on future ft builds; a fix applied only to the default branch leaves the ft build broken.
+
+4. **Check all critical_section / PyMutex scopes affected by the same pattern**: If the bug was "missing `Py_BEGIN_CRITICAL_SECTION` around read-modify-write of `self->field`," every other critical_section / PyMutex scope in the same type that touches `self->field` must use the same discipline. A fix to one method often misses sibling methods (`tp_clear`, `tp_traverse`, getters, setters).
+
+5. **Check all affected struct members, not just the root cause**: A data-race fix for `self->count` frequently leaves `self->cache`, `self->last_used`, or other co-accessed members with the same unprotected pattern. Read the struct definition and verify every member touched under the same lock/atomic contract is handled.
+
+6. **Classify each fix**:
+   - **FIX** if the fix is demonstrably incomplete (missed error path, missed `#ifdef` variant, missed critical_section scope, missed struct member)
+   - **CONSIDER** if the fix might be incomplete but requires deeper analysis to confirm
+   - **ACCEPTABLE** if the fix appears complete across error paths, build variants, sibling scopes, and co-accessed members
+
+Output format for incomplete fixes:
+
+```
+#### [FIX] Incomplete ft fix in commit [SHA] — [title]
+**What was fixed**: [description]
+**What was missed**: [specific missed error path, #ifdef variant, sibling scope, or struct member]
+**Evidence**: [file:line of the unfixed code]
+```
 
 ### Phase 3: Cross-Reference with Other Agents
 
@@ -110,3 +144,10 @@ If shared-state-auditor or unsafe-api-detector have already run:
 3. **Fix propagation is the second most valuable.** When a race is fixed in one file, the same pattern in other files is likely also a race.
 4. **Don't flag reverts as bugs.** They're signals — investigate why, don't just report.
 5. **Report at most 15 findings.** Prioritize incomplete migrations and similar unfixed patterns.
+
+## Running the script
+
+- Call the script with a Bash timeout of **300000 ms** (5 min). The default 120s kills on large repos.
+- Use a **unique temp filename** for the JSON output, e.g. `/tmp/ft-history-analyzer_<scope>_$$.json` — the `$$` PID suffix prevents collisions when multiple agents run concurrently.
+- Forward `--max-files N` and (where supported) `--workers N` from the caller.
+- If the script **times out or errors, do NOT retry it.** Fall back to Grep/Read for the same question. Long-running runs should use `run_in_background`.

@@ -3,6 +3,8 @@
 import os
 import subprocess
 import unittest
+from pathlib import Path
+
 from helpers import import_script, TempExtension
 
 fth = import_script("analyze_ft_history")
@@ -181,6 +183,95 @@ class TestAnalyzeIntegration(unittest.TestCase):
             self.assertIn("summary", result)
             self.assertIn("migration_timeline", result)
             self.assertIn("findings", result)
+
+
+class TestParseArgsWorkers(unittest.TestCase):
+    """Test --workers argument parsing."""
+
+    def test_workers_default(self):
+        args = fth.parse_args([])
+        self.assertEqual(args["workers"], 8)
+
+    def test_workers_explicit(self):
+        args = fth.parse_args(["--workers", "4"])
+        self.assertEqual(args["workers"], 4)
+
+    def test_workers_min_one(self):
+        # Zero or negative clamped to at least 1.
+        args = fth.parse_args(["--workers", "0"])
+        self.assertGreaterEqual(args["workers"], 1)
+
+    def test_workers_invalid_falls_back(self):
+        # Non-numeric value falls back to default 8.
+        args = fth.parse_args(["--workers", "bogus"])
+        self.assertEqual(args["workers"], 8)
+
+
+class TestGetFtCommitDetailsWorkers(unittest.TestCase):
+    """Test _get_ft_commit_details with varying worker counts."""
+
+    def _make_repo_with_ft_commit(self, root: Path) -> str:
+        """Create a ft-related commit, return its hash."""
+        env = _make_git_env()
+        (root / "mod.c").write_text(C_CODE_V2_ATOMIC)
+        subprocess.run(["git", "add", "."], cwd=str(root), capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", "Add _Py_atomic for thread safety"],
+            cwd=str(root),
+            capture_output=True,
+            env=env,
+        )
+        rev = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        return rev.stdout.strip()
+
+    def _run_with_workers(self, workers: int) -> None:
+        with TempExtension({"mod.c": C_CODE_V1}, init_git=True) as root:
+            commit_hash = self._make_repo_with_ft_commit(root)
+            if not commit_hash:
+                self.skipTest("git not available")
+            commits = [
+                {
+                    "hash": commit_hash,
+                    "message": "Add _Py_atomic for thread safety",
+                    "date": "2025-01-01T00:00:00+00:00",
+                    "author": "Test",
+                    "files": ["mod.c"],
+                    "ft_type": "ft_atomic_migration",
+                }
+            ]
+            details = fth._get_ft_commit_details(commits, root, ".", workers=workers)
+            self.assertEqual(len(details), 1)
+            self.assertEqual(details[0]["commit"], commit_hash[:7])
+
+    def test_workers_one(self):
+        self._run_with_workers(1)
+
+    def test_workers_eight(self):
+        self._run_with_workers(8)
+
+    def test_empty_commit_list(self):
+        with TempExtension({"mod.c": C_CODE_V1}, init_git=True) as root:
+            details = fth._get_ft_commit_details([], root, ".", workers=4)
+            self.assertEqual(details, [])
+
+
+class TestAnalyzeToolkitRepoSmoke(unittest.TestCase):
+    """Smoke test: analyze() on a git repo returns a dict with the
+    expected top-level keys and does not hang.
+    """
+
+    def test_analyze_does_not_hang(self):
+        # Use a freshly-initialised tiny repo so the test is hermetic and
+        # doesn't depend on the surrounding filesystem layout.
+        with TempExtension({"mod.c": C_CODE_V1}, init_git=True) as root:
+            result = fth.analyze([str(root), "--workers", "2", "--days", "30"])
+            self.assertIsInstance(result, dict)
+            self.assertIn("migration_timeline", result)
 
 
 if __name__ == "__main__":

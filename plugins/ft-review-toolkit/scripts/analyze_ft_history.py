@@ -16,6 +16,8 @@ Options:
     --until DATE      End date (ISO format, default: today)
     --last N          Analyze exactly the last N commits
     --max-commits N   Cap total commits analyzed (default: 2000)
+    --max-files N     Reserved for future use (current scripts are commit-based)
+    --workers N       Thread pool size for parallel diff fetches (default: 8)
     --no-function     Skip function-level churn
 """
 
@@ -26,6 +28,7 @@ import sys
 import traceback
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -490,14 +493,38 @@ def _detect_reverted_attempts(commits: list[dict]) -> list[dict]:
 
 
 def _get_ft_commit_details(
-    ft_commits: list[dict], project_root: Path, scope: str
+    ft_commits: list[dict],
+    project_root: Path,
+    scope: str,
+    workers: int = 8,
 ) -> list[dict]:
-    """Get detailed info for free-threading related commits."""
-    details = []
-    for commit in ft_commits[:20]:  # Cap at 20 for performance.
-        if _check_script_timeout():
-            break
-        diff_text = _get_commit_diff(commit["hash"], project_root, scope)
+    """Get detailed info for free-threading related commits.
+
+    Diff fetches are parallelized with a ThreadPoolExecutor. The per-call
+    cap of 20 commits is preserved for output-size performance.
+    """
+    details: list[dict] = []
+    targets = ft_commits[:20]  # Cap at 20 for performance.
+    if not targets:
+        return details
+
+    diff_map: dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        futures = {
+            pool.submit(_get_commit_diff, c["hash"], project_root, scope): c["hash"]
+            for c in targets
+        }
+        for future in as_completed(futures):
+            if _check_script_timeout():
+                pool.shutdown(wait=False, cancel_futures=True)
+                break
+            commit_hash = futures[future]
+            try:
+                diff_map[commit_hash] = future.result()
+            except Exception:
+                continue
+
+    for commit in targets:
         details.append(
             {
                 "commit": commit["hash"][:7],
@@ -506,10 +533,51 @@ def _get_ft_commit_details(
                 "author": commit["author"],
                 "ft_type": commit.get("ft_type"),
                 "files": commit["files"],
-                "diff": diff_text,
+                "diff": diff_map.get(commit["hash"], ""),
             }
         )
     return details
+
+
+def _classify_non_ft_commits(
+    non_ft_commits: list[dict],
+    project_root: Path,
+    scope: str,
+    workers: int = 8,
+) -> list[dict]:
+    """Fetch diffs for up to 100 non-ft commits in parallel and reclassify.
+
+    Returns the list of commits that were reclassified as ft-related
+    (their `ft_type` field is also mutated in-place).
+    """
+    newly_ft: list[dict] = []
+    targets = non_ft_commits[:100]
+    if not targets:
+        return newly_ft
+
+    diff_map: dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        futures = {
+            pool.submit(_get_commit_diff, c["hash"], project_root, scope): c["hash"]
+            for c in targets
+        }
+        for future in as_completed(futures):
+            if _check_script_timeout():
+                pool.shutdown(wait=False, cancel_futures=True)
+                break
+            commit_hash = futures[future]
+            try:
+                diff_map[commit_hash] = future.result()
+            except Exception:
+                continue
+
+    for commit in targets:
+        diff_text = diff_map.get(commit["hash"], "")
+        ft_type = classify_ft_commit(commit["message"], diff_text)
+        if ft_type:
+            commit["ft_type"] = ft_type
+            newly_ft.append(commit)
+    return newly_ft
 
 
 def parse_args(argv: list[str]) -> dict:
@@ -522,6 +590,7 @@ def parse_args(argv: list[str]) -> dict:
         "last": None,
         "max_commits": 2000,
         "max_files": 0,
+        "workers": 8,
         "no_function": False,
     }
     i = 0
@@ -544,6 +613,12 @@ def parse_args(argv: list[str]) -> dict:
             i += 2
         elif arg == "--max-files" and i + 1 < len(argv):
             args["max_files"] = int(argv[i + 1])
+            i += 2
+        elif arg == "--workers" and i + 1 < len(argv):
+            try:
+                args["workers"] = max(1, int(argv[i + 1]))
+            except ValueError:
+                args["workers"] = 8
             i += 2
         elif arg == "--no-function":
             args["no_function"] = True
@@ -588,31 +663,54 @@ def analyze(argv: list[str] | None = None) -> dict:
     if rel_scope != ".":
         git_args.append(rel_scope)
 
+    workers = args.get("workers", 8)
+
     proc = _run_git_streaming(git_args, project_root)
     try:
         commits, file_changes = parse_git_log(proc.stdout, max_commits, project_root)
     finally:
-        proc.wait()
-    if proc.returncode != 0:
-        stderr_output = proc.stderr.read() if proc.stderr else ""
-        print(
-            f"Warning: git log failed (exit {proc.returncode}): {stderr_output}",
-            file=sys.stderr,
-        )
+        # Terminate explicitly before wait: `parse_git_log` returns as soon
+        # as max_commits is reached, leaving git still writing to the pipe.
+        # Calling proc.wait() without terminate() can deadlock because the
+        # pipe buffer fills up and git blocks on the write.
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+    # Skip the returncode check — terminate() makes returncode unreliable.
+    # Surface stderr content directly if present, then close the pipe to
+    # avoid ResourceWarning from lingering file descriptors.
+    if proc.stderr:
+        try:
+            stderr_output = proc.stderr.read()
+        except (ValueError, OSError):
+            stderr_output = ""
+        if stderr_output and stderr_output.strip():
+            print(
+                f"Note: git log stderr: {stderr_output[:500]}",
+                file=sys.stderr,
+            )
+        try:
+            proc.stderr.close()
+        except (ValueError, OSError):
+            pass
+    if proc.stdout:
+        try:
+            proc.stdout.close()
+        except (ValueError, OSError):
+            pass
 
     # Filter to free-threading related commits.
     ft_commits = [c for c in commits if c.get("ft_type") is not None]
 
-    # For commits without ft_type from message, check diffs.
+    # For commits without ft_type from message, check diffs in parallel.
     non_ft_commits = [c for c in commits if c.get("ft_type") is None]
-    for commit in non_ft_commits[:100]:  # Check first 100 non-ft commits.
-        if _check_script_timeout():
-            break
-        diff_text = _get_commit_diff(commit["hash"], project_root, rel_scope)
-        ft_type = classify_ft_commit(commit["message"], diff_text)
-        if ft_type:
-            commit["ft_type"] = ft_type
-            ft_commits.append(commit)
+    newly_ft = _classify_non_ft_commits(
+        non_ft_commits, project_root, rel_scope, workers=workers
+    )
+    ft_commits.extend(newly_ft)
 
     # Compute migration timeline.
     timeline = _compute_migration_timeline(ft_commits)
@@ -624,7 +722,9 @@ def analyze(argv: list[str] | None = None) -> dict:
     reverted = _detect_reverted_attempts(commits)
 
     # Get detailed ft commit info.
-    ft_details = _get_ft_commit_details(ft_commits, project_root, rel_scope)
+    ft_details = _get_ft_commit_details(
+        ft_commits, project_root, rel_scope, workers=workers
+    )
 
     # Compute file churn for ft-related files.
     ft_file_stats = []

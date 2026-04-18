@@ -108,3 +108,10 @@ static _Py_atomic_int flag = 0;
 2. **`counter++` needs special atomic.** Don't just wrap in atomic store — use `_Py_atomic_add_int` or `std::atomic::fetch_add`.
 3. **PyObject* is NOT handled here.** PyObject pointers need reference counting, not just atomics. That's the shared-state-auditor's domain.
 4. **Report at most 15 findings.** Prioritize HIGH > MEDIUM > LOW.
+
+## Running the script
+
+- Call the script with a Bash timeout of **300000 ms** (5 min). The default 120s kills on large repos.
+- Use a **unique temp filename** for the JSON output, e.g. `/tmp/atomic-candidate-finder_<scope>_$$.json` — the `$$` PID suffix prevents collisions when multiple agents run concurrently.
+- Forward `--max-files N` and (where supported) `--workers N` from the caller.
+- If the script **times out or errors, do NOT retry it.** Fall back to Grep/Read for the same question. Long-running runs should use `run_in_background`.

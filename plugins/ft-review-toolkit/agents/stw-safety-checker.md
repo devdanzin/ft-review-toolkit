@@ -131,3 +131,10 @@ _PyEval_StartTheWorld(interp);
 6. **The correct pattern is: read during STW, process after.** Collect raw data (pointers, sizes, refcounts) during STW, then `StartTheWorld` and process the data (create Python objects, set errors, etc.).
 
 7. **Report at most 20 findings.** Prioritize CRITICAL (unsafe calls) over MEDIUM (unknown calls).
+
+## Running the script
+
+- Call the script with a Bash timeout of **300000 ms** (5 min). The default 120s kills on large repos.
+- Use a **unique temp filename** for the JSON output, e.g. `/tmp/stw-safety-checker_<scope>_$$.json` — the `$$` PID suffix prevents collisions when multiple agents run concurrently.
+- Forward `--max-files N` and (where supported) `--workers N` from the caller.
+- If the script **times out or errors, do NOT retry it.** Fall back to Grep/Read for the same question. Long-running runs should use `run_in_background`.

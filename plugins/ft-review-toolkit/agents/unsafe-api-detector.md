@@ -103,3 +103,10 @@ For each true positive:
 2. **Borrowed ref findings need careful triage.** `PyDict_GetItem` followed immediately by `Py_INCREF` is the fix — but the real question is whether `PyDict_GetItemRef` (3.13+) is available.
 3. **Container mutation is only RACE if the container is shared.** Local containers are safe.
 4. **Report at most 20 findings.** Prioritize CRITICAL > HIGH > MEDIUM.
+
+## Running the script
+
+- Call the script with a Bash timeout of **300000 ms** (5 min). The default 120s kills on large repos.
+- Use a **unique temp filename** for the JSON output, e.g. `/tmp/unsafe-api-detector_<scope>_$$.json` — the `$$` PID suffix prevents collisions when multiple agents run concurrently.
+- Forward `--max-files N` and (where supported) `--workers N` from the caller.
+- If the script **times out or errors, do NOT retry it.** Fall back to Grep/Read for the same question. Long-running runs should use `run_in_background`.

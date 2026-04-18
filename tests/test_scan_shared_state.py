@@ -266,6 +266,8 @@ class TestScanSharedState(unittest.TestCase):
             self.assertIn("findings", result)
             self.assertIn("summary", result)
             self.assertIn("skipped_files", result)
+            # Scanner actually processed input (silent-failure guard).
+            self.assertGreater(result["files_analyzed"], 0)
 
 
 if __name__ == "__main__":
